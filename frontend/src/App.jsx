@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Interview from "./pages/Interview";
+import Welcome from "./pages/Welcome";
 import Report from "./pages/Report";
 import ThankYou from "./pages/ThankYou";
 import RecruiterReport from "./pages/RecruiterReport";
@@ -13,7 +14,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/interview/:token" element={<Interview />} />
+        <Route path="/interview/:token" element={<Welcome />} />
+        <Route path="/interview/:token/start" element={<Interview />} />
         <Route path="/report/:id" element={<Report />} />
         <Route path="/thank-you" element={<ThankYou />} />
         <Route path="/recruiter/report/:id" element={<RecruiterReport />}/>

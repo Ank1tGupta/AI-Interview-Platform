@@ -44,6 +44,7 @@ class CandidateInterview(models.Model):
     difficulty = models.CharField(max_length=20)
     question_count = models.PositiveIntegerField(default=5)
 
+    candidate_name = models.CharField(max_length=255, default="")
     candidate_email = models.EmailField()
 
     # Secure public link
@@ -67,6 +68,9 @@ class CandidateInterview(models.Model):
         ]
 
     def __str__(self):
+        # include name if available for easier debugging
+        if self.candidate_name:
+            return f"{self.candidate_name} <{self.candidate_email}> - {self.role}"
         return f"{self.candidate_email} - {self.role}"
 
 class Question(models.Model):

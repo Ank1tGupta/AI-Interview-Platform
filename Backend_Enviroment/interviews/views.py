@@ -43,16 +43,18 @@ class CreateCandidateInterviewAPIView(APIView):
             recruiter=request.user
         )
 
+        candidate_name = request.data.get("candidate_name")
         candidate_email = request.data.get("candidate_email")
 
-        if not candidate_email:
+        if not candidate_email or not candidate_name:
             return Response(
-                {"error": "candidate_email is required"},
+                {"error": "candidate_name and candidate_email are required"},
                 status=400
             )
 
         candidate = CandidateInterview.objects.create(
             template=template,
+            candidate_name=candidate_name,
             candidate_email=candidate_email
         )
 
@@ -201,6 +203,7 @@ class TemplateCandidateListAPIView(APIView):
         for c in candidates:
             data.append({
                 "id": c.id,
+                "name": c.candidate_name,
                 "email": c.candidate_email,
                 "is_completed": c.is_completed,
                 "overall_score": c.overall_score,
@@ -237,6 +240,7 @@ class RecruiterReportAPIView(APIView):
             })
 
         return Response({
+            "candidate_name": interview.candidate_name,
             "candidate_email": interview.candidate_email,
             "role": interview.role,
             "difficulty": interview.difficulty,
@@ -281,8 +285,9 @@ class CreateInterviewAPIView(APIView):
         difficulty = request.data.get("difficulty")
         question_count = request.data.get("question_count")
         candidate_email = request.data.get("candidate_email")
+        candidate_name = request.data.get("candidate_name")
 
-        if not all([role, difficulty, question_count, candidate_email]):
+        if not all([role, difficulty, question_count, candidate_email, candidate_name]):
             return Response({"error": "All fields required"}, status=400)
 
         interview = CandidateInterview.objects.create(
@@ -290,7 +295,8 @@ class CreateInterviewAPIView(APIView):
             role=role,
             difficulty=difficulty,
             question_count=question_count,
-            candidate_email=candidate_email
+            candidate_email=candidate_email,
+            candidate_name=candidate_name
         )
 
         # Generate AI questions
@@ -328,6 +334,7 @@ class RecruiterInterviewListAPIView(APIView):
         for i in interviews:
             data.append({
                 "id": i.id,
+                "name": i.candidate_name,
                 "email": i.candidate_email,
                 "role": i.role,
                 "difficulty": i.difficulty,
@@ -336,3 +343,18 @@ class RecruiterInterviewListAPIView(APIView):
             })
 
         return Response(data)
+
+class RecruiterInterviewDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, interview_id):
+        try:
+            interview = CandidateInterview.objects.get(
+                id=interview_id,
+                recruiter=request.user
+            )
+        except CandidateInterview.DoesNotExist:
+            return Response({"error": "Interview not found"}, status=404)
+
+        interview.delete()
+        return Response({"message": "Interview deleted"})

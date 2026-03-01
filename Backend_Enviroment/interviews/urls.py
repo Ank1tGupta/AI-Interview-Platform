@@ -5,6 +5,8 @@ from .views import (
     CompleteInterviewAPIView,
     SubmitAnswerAPIView,
     RecruiterInterviewListAPIView,
+    # add detail view for deletes
+    RecruiterInterviewDetailAPIView,
     RecruiterTemplateListAPIView,
     CreateCandidateInterviewAPIView,
     PublicInterviewAccessAPIView,
@@ -22,4 +24,5 @@ urlpatterns = [
     path("recruiter/templates/create/",CreateInterviewTemplateAPIView.as_view()),
     path("recruiter/create-interview/", CreateInterviewAPIView.as_view()),
     path("recruiter/interviews/", RecruiterInterviewListAPIView.as_view()),
+    path("recruiter/interviews/<int:interview_id>/", RecruiterInterviewDetailAPIView.as_view()),
 ]

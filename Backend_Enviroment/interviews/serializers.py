@@ -13,6 +13,9 @@ class PublicInterviewSerializer(serializers.ModelSerializer):
         model = CandidateInterview
         fields = [
             "id",
+            "role",
+            "difficulty",
+            "candidate_name",
             "candidate_email",
             "is_completed",
             "questions"
@@ -71,6 +74,7 @@ class InterviewReportSerializer(serializers.ModelSerializer):
         model = CandidateInterview
         fields = [
             "id",
+            "candidate_name",
             "candidate_email",
             "overall_score",
             "is_completed",

@@ -12,4 +12,21 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
+// redirect to login on 401 to keep UX smooth
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      error.response &&
+      error.response.status === 401 &&
+      !window.location.pathname.startsWith("/register")
+    ) {
+      localStorage.removeItem("access");
+      localStorage.removeItem("refresh");
+      window.location.href = "/"; // login page
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default API;

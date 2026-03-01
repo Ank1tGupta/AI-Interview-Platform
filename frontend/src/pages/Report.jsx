@@ -38,6 +38,7 @@ export default function Report() {
         </h1>
 
         <div className="mb-6">
+          <p><strong>Candidate:</strong> {report.candidate_name || report.candidate_email}</p>
           <p><strong>Role:</strong> {report.role}</p>
           <p><strong>Difficulty:</strong> {report.difficulty}</p>
           <p>
