@@ -8,54 +8,91 @@ export default function Register() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
     try {
+      setLoading(true);
+
       await API.post("/auth/register/", {
         username,
         email,
-        password
+        password,
       });
 
       alert("Registration successful!");
-      navigate("/");
+      navigate("/login");
+
     } catch (err) {
       alert("Registration failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-      <div className="bg-white p-6 rounded-lg shadow-md w-80">
-        <h2 className="text-xl font-bold mb-4">
-          Recruiter Signup
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-50 via-white to-purple-50 relative overflow-hidden">
+
+      {/* Glow Effects */}
+      <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-300 opacity-20 rounded-full blur-3xl"></div>
+      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-300 opacity-20 rounded-full blur-3xl"></div>
+
+      <div className="bg-white/70 backdrop-blur-xl border border-gray-100 p-10 rounded-3xl shadow-2xl w-full max-w-md">
+
+        <h2 className="text-3xl font-bold text-center bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-6">
+          Create Account
         </h2>
 
-        <input
-          className="w-full mb-3 p-2 border rounded"
-          placeholder="Username"
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <p className="text-gray-500 text-center mb-8">
+          Start building AI-powered interviews
+        </p>
 
-        <input
-          className="w-full mb-3 p-2 border rounded"
-          placeholder="Email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <div className="space-y-5">
 
-        <input
-          type="password"
-          className="w-full mb-3 p-2 border rounded"
-          placeholder="Password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <input
+            type="text"
+            placeholder="Username"
+            className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
 
-        <button
-          onClick={handleRegister}
-          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-        >
-          Register
-        </button>
+          <input
+            type="email"
+            placeholder="Email"
+            className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button
+            onClick={handleRegister}
+            disabled={loading}
+            className="w-full bg-linear-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl shadow-lg hover:opacity-90 transition disabled:opacity-50"
+          >
+            {loading ? "Creating..." : "Register"}
+          </button>
+
+        </div>
+
+        <p className="text-sm text-gray-500 text-center mt-6">
+          Already have an account?{" "}
+          <span
+            onClick={() => navigate("/login")}
+            className="text-indigo-600 cursor-pointer hover:underline"
+          >
+            Login
+          </span>
+        </p>
+
       </div>
     </div>
   );
