@@ -25,7 +25,20 @@ SECRET_KEY = "django-insecure-sk$l^m#ly&9cw#rkr&w#)cbs-)%@yf_)6w3^@lzb6_w)jc9j92
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['https://ai-interview-platform-seven-wine.vercel.app/']
+ALLOWED_HOSTS = [
+    "ai-interview-platform-9rqb.onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "https://ai-interview-platform-seven-wine.vercel.app",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://ai-interview-platform-seven-wine.vercel.app",
+    "https://ai-interview-platform-9rqb.onrender.com",
+]
 
 
 # Application definition
