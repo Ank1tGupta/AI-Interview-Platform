@@ -3,9 +3,16 @@ import re
 
 from django.conf import settings
 from google import genai
+from google.genai import types
 
 QUESTION_MODEL = "gemini-2.5-flash"
 EVALUATION_MODEL = "gemini-2.5-flash"
+
+# ponytail: thinking off - it dominates latency here and these prompts don't
+# need it. Raise the budget if question/feedback quality drops.
+NO_THINKING = types.GenerateContentConfig(
+    thinking_config=types.ThinkingConfig(thinking_budget=0)
+)
 
 _client = None
 
@@ -32,6 +39,7 @@ def generate_interview_questions(role, difficulty, count=5):
     response = get_client().models.generate_content(
         model=QUESTION_MODEL,
         contents=prompt,
+        config=NO_THINKING,
     )
 
     text = response.text or ""
@@ -89,5 +97,6 @@ def evaluate_answer(question_text, answer_text):
     response = get_client().models.generate_content(
         model=EVALUATION_MODEL,
         contents=prompt,
+        config=NO_THINKING,
     )
     return parse_evaluation(response.text or "")

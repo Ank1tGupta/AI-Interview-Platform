@@ -207,6 +207,8 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
 DEFAULT_FROM_EMAIL = os.getenv("EMAIL_HOST_USER", "noreply@aiinterview.com")
+# A hung SMTP connection must not burn the whole gunicorn worker timeout.
+EMAIL_TIMEOUT = 10
 
 # Render terminates TLS at its proxy.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
