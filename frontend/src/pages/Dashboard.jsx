@@ -13,19 +13,19 @@ export default function Dashboard() {
   const [questionCount, setQuestionCount] = useState(5);
   const [candidateEmail, setCandidateEmail] = useState("");
   const [candidateName, setCandidateName] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
 
   const [pendingDelete, setPendingDelete] = useState(null);
-  const [loading, setLoading] = useState(false); // NEW: loading state for refresh
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) {
-      navigate("/");
+      navigate("/login");
       return;
     }
     fetchInterviews();
-  }, [view]);
+  }, [view, navigate]);
 
   const fetchInterviews = async () => {
     const start = Date.now();
@@ -48,18 +48,31 @@ export default function Dashboard() {
   };
 
   const createInterview = async () => {
-    await API.post("/recruiter/create-interview/", {
-      role,
-      difficulty,
-      question_count: questionCount,
-      candidate_email: candidateEmail,
-      candidate_name: candidateName,
-    });
+    if (!role || !candidateName || !candidateEmail) {
+      alert("Role, candidate name and candidate email are required");
+      return;
+    }
 
-    setRole("");
-    setCandidateEmail("");
-    setCandidateName("");
-    fetchInterviews();
+    try {
+      setCreating(true);
+      const res = await API.post("/recruiter/create-interview/", {
+        role,
+        difficulty,
+        question_count: Number(questionCount),
+        candidate_email: candidateEmail,
+        candidate_name: candidateName,
+      });
+
+      alert(res.data.message);
+      setRole("");
+      setCandidateEmail("");
+      setCandidateName("");
+      fetchInterviews();
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to create interview");
+    } finally {
+      setCreating(false);
+    }
   };
 
   const deleteInterview = async (id) => {
@@ -67,21 +80,17 @@ export default function Dashboard() {
       await API.delete(`/recruiter/interviews/${id}/`);
       fetchInterviews();
     } catch (err) {
-      alert("Failed to delete interview");
+      alert(err.response?.data?.error || "Failed to delete interview");
     }
   };
 
   const completed = interviews.filter(i => i.status === "Completed").length;
 
+  const scored = interviews.filter(i => typeof i.score === "number");
   const avgScore =
-    interviews.length > 0
-      ? (
-          interviews
-            .filter(i => i.score !== null)
-            .reduce((acc, i) => acc + i.score, 0) /
-          (interviews.filter(i => i.score !== null).length || 1)
-        ).toFixed(2)
-      : 0;
+    scored.length > 0
+      ? (scored.reduce((acc, i) => acc + i.score, 0) / scored.length).toFixed(2)
+      : "-";
 
   return (
     <div className="min-h-screen flex bg-linear-to-br from-indigo-50 via-white to-purple-50">
@@ -172,6 +181,8 @@ export default function Dashboard() {
 
                 <input
                   type="number"
+                  min="1"
+                  max="20"
                   className="border rounded-lg p-3 focus:ring-2 focus:ring-indigo-400 outline-none"
                   value={questionCount}
                   onChange={(e) => setQuestionCount(e.target.value)}
@@ -194,9 +205,10 @@ export default function Dashboard() {
 
               <button
                 onClick={createInterview}
-                className="mt-6 bg-linear-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl shadow-lg hover:opacity-90 transition"
+                disabled={creating}
+                className="mt-6 bg-linear-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl shadow-lg hover:opacity-90 transition disabled:opacity-50"
               >
-                Create & Send Interview
+                {creating ? "Generating questions..." : "Create & Send Interview"}
               </button>
             </div>
           </>

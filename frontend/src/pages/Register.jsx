@@ -24,7 +24,7 @@ export default function Register() {
       navigate("/login");
 
     } catch (err) {
-      alert("Registration failed");
+      alert(err.response?.data?.error || "Registration failed");
     } finally {
       setLoading(false);
     }

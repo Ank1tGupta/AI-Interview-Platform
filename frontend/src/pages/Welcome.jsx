@@ -14,7 +14,7 @@ export default function Welcome() {
         const res = await API.get(`/public/interview/${token}/`);
         setInterview(res.data);
       } catch (err) {
-        alert("Invalid or expired interview link");
+        alert(err.response?.data?.error || "Invalid or expired interview link");
       } finally {
         setLoading(false);
       }

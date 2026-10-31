@@ -1,8 +1,23 @@
+import json
+import re
+
 from django.conf import settings
 from google import genai
 
-# Create Gemini client
-client = genai.Client()
+QUESTION_MODEL = "gemini-2.5-flash"
+EVALUATION_MODEL = "gemini-2.5-flash"
+
+_client = None
+
+
+def get_client():
+    """Build the Gemini client on first use, not at import time."""
+    global _client
+    if _client is None:
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _client
 
 
 def generate_interview_questions(role, difficulty, count=5):
@@ -14,9 +29,9 @@ def generate_interview_questions(role, difficulty, count=5):
     Return each question on a new line.
     """
 
-    response = client.models.generate_content(
-        model= "gemini-3-flash-preview",
-        contents=prompt
+    response = get_client().models.generate_content(
+        model=QUESTION_MODEL,
+        contents=prompt,
     )
 
     text = response.text or ""
@@ -28,6 +43,33 @@ def generate_interview_questions(role, difficulty, count=5):
     ]
 
     return questions[:count]
+
+
+def parse_evaluation(text):
+    """Pull {"score", "feedback"} out of a model reply.
+
+    The model wraps JSON in markdown fences and sometimes adds prose, so
+    strip the fences and isolate the first object before decoding.
+    """
+    text = re.sub(r"^```(?:json)?\s*", "", text or "", flags=re.MULTILINE)
+    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+
+    json_match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if not json_match:
+        return {"score": None, "feedback": None}
+
+    try:
+        data = json.loads(json_match.group(0))
+    except json.JSONDecodeError:
+        return {"score": None, "feedback": None}
+
+    score = data.get("score")
+    try:
+        score = None if score is None else max(0.0, min(10.0, float(score)))
+    except (TypeError, ValueError):
+        score = None
+
+    return {"score": score, "feedback": data.get("feedback")}
 
 
 def evaluate_answer(question_text, answer_text):
@@ -44,30 +86,8 @@ def evaluate_answer(question_text, answer_text):
     }}
     """
 
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
-        contents=prompt
+    response = get_client().models.generate_content(
+        model=EVALUATION_MODEL,
+        contents=prompt,
     )
-    text = response.text or ""
-    print("RAW GEMINI RESPONSE:", text)
-
-    # strip markdown fences that some AI responses include
-    # e.g. ```json {...}```
-    import re, json
-    # remove starting ```json or ```
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
-    # remove trailing ```
-    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
-
-    # try to isolate JSON object from any surrounding explanation
-    json_match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-    if json_match:
-        text = json_match.group(0)
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # fallback: log and return a default structure so callers can handle it
-        print("Failed to decode AI evaluation JSON, returning empty result")
-        return {"score": None, "feedback": None}
-
+    return parse_evaluation(response.text or "")
