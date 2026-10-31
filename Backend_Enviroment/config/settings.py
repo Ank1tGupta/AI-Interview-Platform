@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-sk$l^m#ly&9cw#rkr&w#)cbs-)%@yf_)6w3^@lzb6_w)jc9j92
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['https://ai-interview-platform-seven-wine.vercel.app/']
 
 
 # Application definition
