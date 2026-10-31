@@ -12,9 +12,10 @@ export default function Report() {
       try {
         const res = await API.get(`/recruiter/report/${id}/`);
         setReport(res.data);
-        setLoading(false);
       } catch (err) {
-        alert("Failed to load report");
+        alert(err.response?.data?.error || "Failed to load report");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -51,7 +52,7 @@ export default function Report() {
 
         <hr className="mb-6" />
 
-        {report.questions.map((q, index) => (
+        {(report.questions || []).map((q, index) => (
           <div key={q.id} className="mb-6 p-4 border rounded-lg">
             <h3 className="font-semibold mb-2">
               Question {index + 1}

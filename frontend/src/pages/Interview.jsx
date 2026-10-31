@@ -16,10 +16,11 @@ export default function Interview() {
     const fetchInterview = async () => {
       try {
         const res = await API.get(`/public/interview/${token}/`);
-        setQuestions(res.data.questions);
-        setLoading(false);
+        setQuestions(res.data.questions || []);
       } catch (err) {
-        alert("Invalid or expired interview link");
+        alert(err.response?.data?.error || "Invalid or expired interview link");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -46,10 +47,9 @@ export default function Interview() {
         await API.post(`/public/interview/${token}/complete/`);
         navigate("/thank-you");
       }
-
-      setSubmitting(false);
     } catch (err) {
-      alert("Failed to submit answer");
+      alert(err.response?.data?.error || "Failed to submit answer");
+    } finally {
       setSubmitting(false);
     }
   };

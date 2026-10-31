@@ -23,7 +23,7 @@ export default function Login() {
 
       navigate("/dashboard");
     } catch (err) {
-      alert("Invalid credentials");
+      alert(err.response?.data?.error || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

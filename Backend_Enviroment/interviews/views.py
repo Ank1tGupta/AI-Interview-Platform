@@ -1,78 +1,40 @@
-from django.shortcuts import render
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.shortcuts import get_object_or_404
-from .services.ai_service import generate_interview_questions
-from .services.ai_service import evaluate_answer
-from .models import Evaluation
-from django.utils import timezone
-from .serializers import InterviewReportSerializer
+import logging
+
+from django.conf import settings
 from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import InterviewTemplate, CandidateInterview
+from .models import Answer, CandidateInterview, Question
+from .serializers import PublicInterviewSerializer
+from .services.ai_service import evaluate_answer, generate_interview_questions
+
+logger = logging.getLogger(__name__)
 
 
-from .models import Question, Answer
-from .serializers import (
-    QuestionSerializer,
-    AnswerSerializer,
-    PublicInterviewSerializer,
-)
+def send_invitation(interview):
+    """Email the candidate their interview link. Returns the link.
 
-import re
-
-def extract_score(ai_text):
+    A mail failure must not lose the interview that was already created,
+    so it is logged rather than raised.
     """
-    Extracts score out of 10 from AI response.
-    Example match: 'Score: 7/10'
-    """
-    match = re.search(r'(\d+(\.\d+)?)/10', ai_text)
-    if match:
-        return float(match.group(1))
-    return 0.0
-
-
-class CreateCandidateInterviewAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, template_id):
-        template = get_object_or_404(
-            InterviewTemplate,
-            id=template_id,
-            recruiter=request.user
-        )
-
-        candidate_name = request.data.get("candidate_name")
-        candidate_email = request.data.get("candidate_email")
-
-        if not candidate_email or not candidate_name:
-            return Response(
-                {"error": "candidate_name and candidate_email are required"},
-                status=400
-            )
-
-        candidate = CandidateInterview.objects.create(
-            template=template,
-            candidate_name=candidate_name,
-            candidate_email=candidate_email
-        )
-
-
-        interview_link = f"http://localhost:5173/interview/{candidate.token}"
-
+    link = f"{settings.FRONTEND_URL}/interview/{interview.token}"
+    try:
         send_mail(
             subject="AI Interview Invitation",
-            message=f"Click here to start your interview:\n\n{interview_link}",
-            from_email="noreply@aiinterview.com",
-            recipient_list=[candidate_email],
+            message=f"Click here to start your interview:\n\n{link}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[interview.candidate_email],
         )
+    except Exception:
+        logger.exception("Failed to send invitation to %s", interview.candidate_email)
+        return link, False
+    return link, True
 
-        return Response({
-            "message": "Candidate interview created",
-            "interview_link": interview_link
-        })
-    
+
 class PublicInterviewAccessAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -100,28 +62,37 @@ class SubmitAnswerAPIView(APIView):
             token=token
         )
 
-        question_id = request.data.get("question_id")
+        if interview.is_completed:
+            return Response(
+                {"error": "This interview has already been completed"},
+                status=400
+            )
+
         answer_text = request.data.get("answer_text")
-        time_taken = request.data.get("time_taken_seconds")
+        if not answer_text or not str(answer_text).strip():
+            return Response({"error": "answer_text is required"}, status=400)
 
         question = get_object_or_404(
             Question,
-            id=question_id,
+            id=request.data.get("question_id"),
             interview=interview
         )
 
-        # 🧠 AI Evaluation
         try:
-            evaluation = evaluate_answer(
-                question.text,
-                answer_text
-            )
-        except Exception as exc:  # catch JSON errors or API failures
-            print("Evaluation error:", exc)
+            time_taken = request.data.get("time_taken_seconds")
+            time_taken = None if time_taken is None else max(0, int(time_taken))
+        except (TypeError, ValueError):
+            time_taken = None
+
+        # An AI failure must not cost the candidate their answer, so store it
+        # unscored and let the recruiter see a missing score.
+        try:
+            evaluation = evaluate_answer(question.text, answer_text)
+        except Exception:
+            logger.exception("Evaluation failed for question %s", question.id)
             evaluation = {"score": None, "feedback": None}
 
-        # store whatever we got (may be None) - avoids blowing up later
-        answer, created = Answer.objects.update_or_create(
+        answer, _ = Answer.objects.update_or_create(
             question=question,
             defaults={
                 "answer_text": answer_text,
@@ -130,14 +101,14 @@ class SubmitAnswerAPIView(APIView):
                 "feedback": evaluation.get("feedback"),
             }
         )
-        print("Saved Score:", answer.score)
-        print("Saved Feedback:", answer.feedback)
+
         return Response({
             "message": "Answer submitted",
             "score": answer.score,
             "feedback": answer.feedback
         })
-    
+
+
 class CompleteInterviewAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -147,15 +118,21 @@ class CompleteInterviewAPIView(APIView):
             token=token
         )
 
-        answers = Answer.objects.filter(
-            question__interview=interview
-        )
+        if interview.is_completed:
+            return Response(
+                {"error": "This interview has already been completed"},
+                status=400
+            )
 
-        total_score = sum(a.score for a in answers if a.score is not None)
-        count = answers.count()
+        # Average over scored answers only - unscored ones (AI failures or
+        # skipped questions) would otherwise drag the average down.
+        scores = [
+            a.score for a in Answer.objects.filter(question__interview=interview)
+            if a.score is not None
+        ]
 
         interview.overall_score = (
-            total_score / count if count > 0 else 0
+            round(sum(scores) / len(scores), 2) if scores else None
         )
         interview.is_completed = True
         interview.completed_at = timezone.now()
@@ -165,52 +142,6 @@ class CompleteInterviewAPIView(APIView):
             "message": "Interview completed",
             "overall_score": interview.overall_score
         })
-
-class RecruiterTemplateListAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        templates = InterviewTemplate.objects.filter(
-            recruiter=request.user
-        )
-
-        data = []
-
-        for template in templates:
-            data.append({
-                "id": template.id,
-                "role": template.role,
-                "difficulty": template.difficulty,
-                "question_count": template.question_count
-            })
-
-        return Response(data)
-    
-class TemplateCandidateListAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, template_id):
-        template = get_object_or_404(
-            InterviewTemplate,
-            id=template_id,
-            recruiter=request.user
-        )
-
-        candidates = template.candidateinterview_set.all()
-
-        data = []
-
-        for c in candidates:
-            data.append({
-                "id": c.id,
-                "name": c.candidate_name,
-                "email": c.candidate_email,
-                "is_completed": c.is_completed,
-                "overall_score": c.overall_score,
-                "token": str(c.token)
-            })
-
-        return Response(data)
 
 class RecruiterReportAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -226,13 +157,14 @@ class RecruiterReportAPIView(APIView):
 
         questions_data = []
 
-        for question in interview.questions.all():
+        for question in interview.questions.select_related("answer"):
             try:
-                answer = question.answer  # ✅ correct for OneToOne
+                answer = question.answer  # OneToOne reverse accessor
             except Answer.DoesNotExist:
                 answer = None
 
             questions_data.append({
+                "id": question.id,
                 "question": question.text,
                 "answer": answer.answer_text if answer else None,
                 "score": getattr(answer, "score", None),
@@ -249,33 +181,9 @@ class RecruiterReportAPIView(APIView):
             "questions": questions_data
         })
 
-class CreateInterviewTemplateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+MAX_QUESTIONS = 20
+DIFFICULTIES = ("easy", "medium", "hard")
 
-    def post(self, request):
-        role = request.data.get("role")
-        difficulty = request.data.get("difficulty")
-        question_count = request.data.get("question_count", 5)
-
-        if not role or not difficulty:
-            return Response(
-                {"error": "role and difficulty are required"},
-                status=400
-            )
-
-        template = InterviewTemplate.objects.create(
-            recruiter=request.user,
-            role=role,
-            difficulty=difficulty,
-            question_count=question_count
-        )
-
-        return Response({
-            "id": template.id,
-            "role": template.role,
-            "difficulty": template.difficulty,
-            "question_count": template.question_count
-        })
 
 class CreateInterviewAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -290,37 +198,64 @@ class CreateInterviewAPIView(APIView):
         if not all([role, difficulty, question_count, candidate_email, candidate_name]):
             return Response({"error": "All fields required"}, status=400)
 
+        try:
+            question_count = int(question_count)
+        except (TypeError, ValueError):
+            return Response({"error": "question_count must be a number"}, status=400)
+
+        if not 1 <= question_count <= MAX_QUESTIONS:
+            return Response(
+                {"error": f"question_count must be between 1 and {MAX_QUESTIONS}"},
+                status=400
+            )
+
+        if difficulty not in DIFFICULTIES:
+            return Response({"error": "Invalid difficulty"}, status=400)
+
+        # Generate the questions before creating anything, so an AI failure
+        # does not leave an interview with no questions in it.
+        try:
+            questions = generate_interview_questions(
+                role, difficulty, count=question_count
+            )
+        except Exception:
+            logger.exception("Question generation failed for role=%s", role)
+            return Response(
+                {"error": "Could not generate interview questions. Try again."},
+                status=503
+            )
+
+        if not questions:
+            return Response(
+                {"error": "Could not generate interview questions. Try again."},
+                status=503
+            )
+
         interview = CandidateInterview.objects.create(
             recruiter=request.user,
             role=role,
             difficulty=difficulty,
-            question_count=question_count,
+            question_count=len(questions),
             candidate_email=candidate_email,
             candidate_name=candidate_name
         )
 
-        # Generate AI questions
-        questions = generate_interview_questions(role, difficulty)
+        Question.objects.bulk_create([
+            Question(interview=interview, text=q, order=i + 1)
+            for i, q in enumerate(questions)
+        ])
 
-        for i, q in enumerate(questions[:int(question_count)]):
-            Question.objects.create(
-                interview=interview,
-                text=q,
-                order=i+1
-            )
+        interview_link, mailed = send_invitation(interview)
 
-        # Send email
-        interview_link = f"http://localhost:5173/interview/{interview.token}"
+        return Response({
+            "message": (
+                "Interview created & email sent" if mailed
+                else "Interview created, but the invitation email failed to send"
+            ),
+            "interview_link": interview_link,
+        })
 
-        send_mail(
-            subject="AI Interview Invitation",
-            message=f"Click here to start your interview:\n\n{interview_link}",
-            from_email="noreply@aiinterview.com",
-            recipient_list=[candidate_email],
-        )
 
-        return Response({"message": "Interview created & email sent"})
-    
 class RecruiterInterviewListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

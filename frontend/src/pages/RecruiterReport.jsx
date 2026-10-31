@@ -5,15 +5,27 @@ import API from "../services/api";
 export default function RecruiterReport() {
   const { id } = useParams();
   const [report, setReport] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchReport = async () => {
-      const res = await API.get(`/recruiter/report/${id}/`);
-      setReport(res.data);
+      try {
+        const res = await API.get(`/recruiter/report/${id}/`);
+        setReport(res.data);
+      } catch (err) {
+        setError(err.response?.data?.error || "Failed to load report");
+      }
     };
 
     fetchReport();
   }, [id]);
+
+  if (error)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-50 to-purple-50">
+        <div className="text-red-600">{error}</div>
+      </div>
+    );
 
   if (!report)
     return (
@@ -76,7 +88,7 @@ export default function RecruiterReport() {
         {/* Question Breakdown */}
         <div className="space-y-8">
 
-          {report.questions.map((q, index) => (
+          {(report.questions || []).map((q, index) => (
             <div
               key={q.id}
               className="bg-white p-8 rounded-3xl shadow-md hover:shadow-xl transition"
