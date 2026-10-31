@@ -50,7 +50,8 @@ export default function Login() {
 
           <input
             type="text"
-            placeholder="Username"
+            autoComplete="username"
+            placeholder="Username or email"
             className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none"
             value={username}
             onChange={(e) => setUsername(e.target.value)}

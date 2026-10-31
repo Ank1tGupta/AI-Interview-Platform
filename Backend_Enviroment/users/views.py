@@ -10,6 +10,20 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
+def resolve_username(identifier):
+    """Let people sign in with their email as well as their username.
+
+    Email is not unique on Django's User model, so only resolve when it
+    matches exactly one account; otherwise fall through to a username
+    lookup and let authentication fail normally.
+    """
+    if "@" not in identifier:
+        return identifier
+
+    matches = list(User.objects.filter(email__iexact=identifier)[:2])
+    return matches[0].username if len(matches) == 1 else identifier
+
+
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -24,7 +38,9 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        user = authenticate(username=username, password=password)
+        user = authenticate(
+            username=resolve_username(username.strip()), password=password
+        )
 
         if not user:
             return Response({"error": "Invalid credentials"}, status=401)
