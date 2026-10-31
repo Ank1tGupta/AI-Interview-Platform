@@ -107,12 +107,27 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # sqlite only for local dev - a container filesystem is wiped on every deploy,
 # so production must supply DATABASE_URL (e.g. Postgres).
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-    )
-}
+# Hosting dashboards hand back values with stray quotes or whitespace, and an
+# unset variable often arrives as "" rather than absent.
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip().strip("\"'")
+
+if DATABASE_URL:
+    scheme, separator, _ = DATABASE_URL.partition("://")
+    if not separator or not scheme:
+        # Never echo the value itself - it carries the database password.
+        raise RuntimeError(
+            "DATABASE_URL must look like "
+            "postgresql://USER:PASSWORD@HOST:PORT/NAME. "
+            + ("Its scheme is empty." if separator else "It has no '://' scheme.")
+        )
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
